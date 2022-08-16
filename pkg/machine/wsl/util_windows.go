@@ -280,7 +280,7 @@ func obtainShutdownPrivilege() error {
 	return nil
 }
 
-func getProcessState(pid int) (active bool, exitCode int) {
+func GetProcessState(pid int) (active bool, exitCode int) {
 	const da = syscall.STANDARD_RIGHTS_READ | syscall.PROCESS_QUERY_INFORMATION | syscall.SYNCHRONIZE
 	handle, err := syscall.OpenProcess(da, false, uint32(pid))
 	if err != nil {
