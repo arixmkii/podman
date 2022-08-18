@@ -24,4 +24,5 @@ func ifRootlessConfigPath() (string, error) {
 
 var defaultHelperBinariesDir = []string{
 	"C:\\Program Files\\RedHat\\Podman",
+	"C:\\podman-testbuild",
 }

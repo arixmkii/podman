@@ -1,5 +1,5 @@
-//go:build (amd64 && !windows) || (arm64 && !windows)
-// +build amd64,!windows arm64,!windows
+//go:build amd64 || arm64
+// +build amd64 arm64
 
 package qemu
 
@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -33,7 +34,6 @@ import (
 	"github.com/digitalocean/go-qemu/qmp"
 	"github.com/docker/go-units"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 )
 
 var (
@@ -125,12 +125,16 @@ func (p *Provider) NewMachine(opts machine.InitOptions) (machine.VM, error) {
 		return nil, err
 	}
 	vm.QMPMonitor = monitor
-	cmd = append(cmd, []string{"-qmp", monitor.Network + ":/" + monitor.Address.GetPath() + ",server=on,wait=off"}...)
+	cmd = append(cmd, []string{"-qmp", monitor.Network + ":" + monitor.Address.GetPath() + ",server=on,wait=off"}...)
 
 	// Add network
 	// Right now the mac address is hardcoded so that the host networking gives it a specific IP address.  This is
 	// why we can only run one vm at a time right now
-	cmd = append(cmd, []string{"-netdev", "socket,id=vlan,fd=3", "-device", "virtio-net-pci,netdev=vlan,mac=5a:94:ef:e4:0c:ee"}...)
+	if runtime.GOOS != "windows" {
+		cmd = append(cmd, []string{"-netdev", "socket,id=vlan,fd=3", "-device", "virtio-net-pci,netdev=vlan,mac=5a:94:ef:e4:0c:ee"}...)
+	} else {
+		cmd = append(cmd, []string{"-netdev", fmt.Sprintf("%s:%d", "socket,id=vlan,connect=127.0.0.1", port + 1), "-device", "virtio-net-pci,netdev=vlan,mac=5a:94:ef:e4:0c:ee"}...)
+	}
 	if err := vm.setReadySocket(); err != nil {
 		return nil, err
 	}
@@ -337,7 +341,12 @@ func (v *MachineVM) Init(opts machine.InitOptions) (bool, error) {
 		}
 	}
 	v.Mounts = mounts
-	v.UID = os.Getuid()
+	if runtime.GOOS != "windows" {
+	    v.UID = os.Getuid()
+	} else {
+		// FIXME Hardcoded to match fc image, can we get something better?
+		v.UID = 501
+	}
 
 	// Add location of bootable image
 	v.CmdLine = append(v.CmdLine, "-drive", "if=virtio,file="+v.getImageFile())
@@ -472,6 +481,7 @@ func (v *MachineVM) Start(name string, _ machine.StartOptions) error {
 	var (
 		conn           net.Conn
 		err            error
+		fd             *os.File
 		qemuSocketConn net.Conn
 		wait           = time.Millisecond * 500
 	)
@@ -522,29 +532,31 @@ func (v *MachineVM) Start(name string, _ machine.StartOptions) error {
 		}
 	}
 
-	// If the qemusocketpath exists and the vm is off/down, we should rm
-	// it before the dial as to avoid a segv
-	if err := v.QMPMonitor.Address.Delete(); err != nil {
-		return err
-	}
-	for i := 0; i < 6; i++ {
-		qemuSocketConn, err = net.Dial("unix", v.QMPMonitor.Address.GetPath())
-		if err == nil {
-			break
+	if runtime.GOOS != "windows" {
+		// If the qemusocketpath exists and the vm is off/down, we should rm
+		// it before the dial as to avoid a segv
+		if err := v.QMPMonitor.Address.Delete(); err != nil {
+			return err
 		}
-		time.Sleep(wait)
-		wait++
-	}
-	if err != nil {
-		return err
-	}
-	defer qemuSocketConn.Close()
+		for i := 0; i < 6; i++ {
+			qemuSocketConn, err = net.Dial("unix", v.QMPMonitor.Address.GetPath())
+			if err == nil {
+				break
+			}
+			time.Sleep(wait)
+			wait++
+		}
+		if err != nil {
+			return err
+		}
+		defer qemuSocketConn.Close()
 
-	fd, err := qemuSocketConn.(*net.UnixConn).File()
-	if err != nil {
-		return err
+		fd, err := qemuSocketConn.(*net.UnixConn).File()
+		if err != nil {
+			return err
+		}
+		defer fd.Close()
 	}
-	defer fd.Close()
 	dnr, err := os.OpenFile(os.DevNull, os.O_RDONLY, 0755)
 	if err != nil {
 		return err
@@ -557,7 +569,10 @@ func (v *MachineVM) Start(name string, _ machine.StartOptions) error {
 	defer dnw.Close()
 
 	attr := new(os.ProcAttr)
-	files := []*os.File{dnr, dnw, dnw, fd}
+	files := []*os.File{dnr, dnw, dnw}
+	if runtime.GOOS != "windows" {
+		files = append(files, fd)
+	}
 	attr.Files = files
 	cmdLine := v.CmdLine
 
@@ -590,8 +605,11 @@ func (v *MachineVM) Start(name string, _ machine.StartOptions) error {
 		Stdin:      dnr,
 		Stdout:     dnw,
 		Stderr:     stderrBuf,
-		ExtraFiles: []*os.File{fd},
 	}
+	if runtime.GOOS != "windows" {
+		cmd.ExtraFiles = []*os.File{fd}
+	}
+
 	err = cmd.Start()
 	if err != nil {
 		// check if qemu was not found
@@ -629,14 +647,9 @@ func (v *MachineVM) Start(name string, _ machine.StartOptions) error {
 			break
 		}
 		// check if qemu is still alive
-		var status syscall.WaitStatus
-		pid, err := syscall.Wait4(cmd.Process.Pid, &status, syscall.WNOHANG, nil)
+		err := isQemuAlive(cmd.Process.Pid, stderrBuf)
 		if err != nil {
-			return fmt.Errorf("failed to read qemu process status: %w", err)
-		}
-		if pid > 0 {
-			// child exited
-			return fmt.Errorf("qemu exited unexpectedly with exit code %d, stderr: %s", status.ExitStatus(), stderrBuf.String())
+			return err
 		}
 		time.Sleep(wait)
 		wait++
@@ -870,7 +883,7 @@ func NewQMPMonitor(network, name string, timeout time.Duration) (Monitor, error)
 	if err != nil {
 		return Monitor{}, err
 	}
-	if !rootless.IsRootless() {
+	if !rootless.IsRootless() && runtime.GOOS != "windows" { // FIXME should IsRootless work correctly on widnows?
 		rtDir = "/run"
 	}
 	rtDir = filepath.Join(rtDir, "podman")
@@ -1230,7 +1243,12 @@ func (v *MachineVM) startHostNetworking() (string, apiForwardingState, error) {
 
 	attr.Files = []*os.File{dnr, dnw, dnw}
 	cmd := []string{binary}
-	cmd = append(cmd, []string{"-listen-qemu", fmt.Sprintf("unix://%s", v.QMPMonitor.Address.GetPath()), "-pid-file", v.PidFilePath.GetPath()}...)
+
+	if runtime.GOOS != "windows" {
+		cmd = append(cmd, []string{"-listen-qemu", fmt.Sprintf("unix://%s", v.QMPMonitor.Address.GetPath()), "-pid-file", v.PidFilePath.GetPath()}...)
+	} else {
+		cmd = append(cmd, []string{"-listen-qemu", fmt.Sprintf("tcp://0.0.0.0:%d", v.Port + 1), "-pid-file", v.PidFilePath.GetPath()}...)
+	}
 	// Add the ssh port
 	cmd = append(cmd, []string{"-ssh-port", fmt.Sprintf("%d", v.Port)}...)
 
@@ -1371,7 +1389,7 @@ func (v *MachineVM) setPIDSocket() error {
 	if err != nil {
 		return err
 	}
-	if !rootless.IsRootless() {
+	if !rootless.IsRootless() && runtime.GOOS != "windows" { // FIXME should IsRootless work correctly on widnows?
 		rtPath = "/run"
 	}
 	socketDir := filepath.Join(rtPath, "podman")
@@ -1397,7 +1415,7 @@ func (v *MachineVM) getSocketandPid() (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	if !rootless.IsRootless() {
+	if !rootless.IsRootless() && runtime.GOOS != "windows" { // FIXME should IsRootless work correctly on widnows?
 		rtPath = "/run"
 	}
 	socketDir := filepath.Join(rtPath, "podman")
@@ -1722,14 +1740,6 @@ func (p *Provider) RemoveAndCleanMachines() error {
 		}
 	}
 	return prevErr
-}
-
-func isProcessAlive(pid int) bool {
-	err := unix.Kill(pid, syscall.Signal(0))
-	if err == nil || err == unix.EPERM {
-		return true
-	}
-	return false
 }
 
 func (p *Provider) VMType() string {
