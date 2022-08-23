@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -129,7 +130,12 @@ func (p *Provider) NewMachine(opts machine.InitOptions) (machine.VM, error) {
 	// Add network
 	// Right now the mac address is hardcoded so that the host networking gives it a specific IP address.  This is
 	// why we can only run one vm at a time right now
-	cmd = append(cmd, []string{"-netdev", "socket,id=vlan,fd=3", "-device", "virtio-net-pci,netdev=vlan,mac=5a:94:ef:e4:0c:ee"}...)
+	if runtime.GOOS != "windows" {
+		cmd = append(cmd, []string{"-netdev", "socket,id=vlan,fd=3", "-device", "virtio-net-pci,netdev=vlan,mac=5a:94:ef:e4:0c:ee"}...)
+	} else {
+		vlanSocket := machine.VMFile{Path: toVlanSockPath(monitor.Address.GetPath())}
+		cmd = append(cmd, []string{"-netdev", fmt.Sprintf("stream,id=vlan,server=off,addr.type=unix,addr.path=%s", vlanSocket.GetPath()), "-device", "virtio-net-pci,netdev=vlan,mac=5a:94:ef:e4:0c:ee"}...)
+	}
 	if err := vm.setReadySocket(); err != nil {
 		return nil, err
 	}
@@ -336,7 +342,11 @@ func (v *MachineVM) Init(opts machine.InitOptions) (bool, error) {
 		}
 	}
 	v.Mounts = mounts
-	v.UID = os.Getuid()
+	if runtime.GOOS != "windows" {
+	    v.UID = os.Getuid()
+	} else {
+		v.UID = 501 // Hardcoded to match FCOS image, can we get something better?
+	}
 
 	// Add location of bootable image
 	v.CmdLine = append(v.CmdLine, "-drive", "if=virtio,file="+v.getImageFile())
@@ -471,6 +481,7 @@ func (v *MachineVM) Start(name string, _ machine.StartOptions) error {
 	var (
 		conn           net.Conn
 		err            error
+		fd             *os.File
 		qemuSocketConn net.Conn
 		wait           = time.Millisecond * 500
 	)
@@ -526,24 +537,26 @@ func (v *MachineVM) Start(name string, _ machine.StartOptions) error {
 	if err := v.QMPMonitor.Address.Delete(); err != nil {
 		return err
 	}
-	for i := 0; i < 6; i++ {
-		qemuSocketConn, err = net.Dial("unix", v.QMPMonitor.Address.GetPath())
-		if err == nil {
-			break
+	if runtime.GOOS != "windows" {
+		for i := 0; i < 6; i++ {
+			qemuSocketConn, err = net.Dial("unix", v.QMPMonitor.Address.GetPath())
+			if err == nil {
+				break
+			}
+			time.Sleep(wait)
+			wait++
 		}
-		time.Sleep(wait)
-		wait++
-	}
-	if err != nil {
-		return err
-	}
-	defer qemuSocketConn.Close()
+		if err != nil {
+			return err
+		}
+		defer qemuSocketConn.Close()
 
-	fd, err := qemuSocketConn.(*net.UnixConn).File()
-	if err != nil {
-		return err
+		fd, err := qemuSocketConn.(*net.UnixConn).File()
+		if err != nil {
+			return err
+		}
+		defer fd.Close()
 	}
-	defer fd.Close()
 	dnr, err := os.OpenFile(os.DevNull, os.O_RDONLY, 0755)
 	if err != nil {
 		return err
@@ -556,7 +569,10 @@ func (v *MachineVM) Start(name string, _ machine.StartOptions) error {
 	defer dnw.Close()
 
 	attr := new(os.ProcAttr)
-	files := []*os.File{dnr, dnw, dnw, fd}
+	files := []*os.File{dnr, dnw, dnw}
+	if runtime.GOOS != "windows" {
+		files = append(files, fd)
+	}
 	attr.Files = files
 	cmdLine := v.CmdLine
 
@@ -589,7 +605,9 @@ func (v *MachineVM) Start(name string, _ machine.StartOptions) error {
 		Stdin:      dnr,
 		Stdout:     dnw,
 		Stderr:     stderrBuf,
-		ExtraFiles: []*os.File{fd},
+	}
+	if runtime.GOOS != "windows" {
+		cmd.ExtraFiles = []*os.File{fd}
 	}
 	err = cmd.Start()
 	if err != nil {
@@ -805,6 +823,11 @@ func (v *MachineVM) Stop(_ string, _ machine.StopOptions) error {
 	}
 	// Remove socket
 	if err := v.QMPMonitor.Address.Delete(); err != nil {
+		return err
+	}
+	// Remove vlan socket
+	vlanSocket := machine.VMFile{Path: toVlanSockPath(v.QMPMonitor.Address.GetPath())}
+	if err := vlanSocket.Delete(); err != nil {
 		return err
 	}
 
@@ -1224,7 +1247,12 @@ func (v *MachineVM) startHostNetworking() (string, apiForwardingState, error) {
 
 	attr.Files = []*os.File{dnr, dnw, dnw}
 	cmd := []string{binary}
-	cmd = append(cmd, []string{"-listen-qemu", fmt.Sprintf("unix://%s", v.QMPMonitor.Address.GetPath()), "-pid-file", v.PidFilePath.GetPath()}...)
+	if runtime.GOOS != "windows" {
+		cmd = append(cmd, []string{"-listen-qemu", fmt.Sprintf("unix://%s", v.QMPMonitor.Address.GetPath()), "-pid-file", v.PidFilePath.GetPath()}...)
+	} else {
+		vlanSocket := machine.VMFile{Path: toVlanSockPath(v.QMPMonitor.Address.GetPath())}
+		cmd = append(cmd, []string{"-listen-qemu", fmt.Sprintf("unix://%s", strings.Replace(vlanSocket.GetPath(), "\\", "/", -1)), "-pid-file", v.PidFilePath.GetPath()}...)
+	}
 	// Add the ssh port
 	cmd = append(cmd, []string{"-ssh-port", fmt.Sprintf("%d", v.Port)}...)
 
@@ -1720,6 +1748,10 @@ func (p *Provider) RemoveAndCleanMachines() error {
 
 func (p *Provider) VMType() string {
 	return vmtype
+}
+
+func toVlanSockPath(path string) string {
+	return strings.Replace(path, "qmp_", "vlan_", 1)
 }
 
 func isRootfull() bool {
