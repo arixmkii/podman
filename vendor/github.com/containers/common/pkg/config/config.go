@@ -1300,6 +1300,7 @@ func (c *Config) FindHelperBinary(name string, searchPATH bool) (string, error) 
 		dirList = append([]string{dir}, dirList...)
 	}
 
+	expandedDirList := []string{}
 	for _, path := range dirList {
 		if path == bindirPrefix || strings.HasPrefix(path, bindirPrefix+string(filepath.Separator)) {
 			// Calculate the path to the executable first time we encounter a $BINDIR prefix.
@@ -1319,11 +1320,13 @@ func (c *Config) FindHelperBinary(name string, searchPATH bool) (string, error) 
 				path = filepath.Join(bindirPath, strings.TrimPrefix(path, bindirPrefix+string(filepath.Separator)))
 			}
 		}
-		fullpath := filepath.Join(path, name)
-		if fi, err := os.Stat(fullpath); err == nil && fi.Mode().IsRegular() {
-			return fullpath, nil
-		}
+		expandedDirList = append(expandedDirList, path)
 	}
+
+	if fullpath, err := lookPathExplicit(name, expandedDirList); err == nil {
+		return fullpath, nil
+	}
+
 	if searchPATH {
 		return exec.LookPath(name)
 	}
