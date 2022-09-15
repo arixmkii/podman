@@ -1261,7 +1261,7 @@ func (v *MachineVM) startHostNetworking() (string, apiForwardingState, error) {
 		cmd = append(cmd, []string{"-listen-qemu", fmt.Sprintf("unix://%s", v.QMPMonitor.Address.GetPath()), "-pid-file", v.PidFilePath.GetPath()}...)
 	} else {
 		vlanSocket := machine.VMFile{Path: toVlanSockPath(v.QMPMonitor.Address.GetPath())}
-		cmd = append(cmd, []string{"-listen-qemu", fmt.Sprintf("unix:///%s", strings.Replace(vlanSocket.GetPath(), "\\", "/", -1)), "-pid-file", v.PidFilePath.GetPath()}...)
+		cmd = append(cmd, []string{"-listen-qemu", fmt.Sprintf("unix://%s", strings.Replace(vlanSocket.GetPath(), "\\", "/", -1)), "-pid-file", v.PidFilePath.GetPath()}...)
 	}
 	// Add the ssh port
 	cmd = append(cmd, []string{"-ssh-port", fmt.Sprintf("%d", v.Port)}...)
