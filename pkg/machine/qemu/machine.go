@@ -1261,10 +1261,6 @@ func (v *MachineVM) startHostNetworking() (string, apiForwardingState, error) {
 		return "", noForwarding, err
 	}
 	binary, err := cfg.FindHelperBinary(machine.ForwarderBinaryName, false)
-	// workaround for lookup on Windows
-	if runtime.GOOS == "windows" {
-		binary, err = cfg.FindHelperBinary(machine.ForwarderBinaryName + ".exe", false)
-	}
 	if err != nil {
 		return "", noForwarding, err
 	}
