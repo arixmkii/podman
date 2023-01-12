@@ -307,9 +307,13 @@ func (v *MachineVM) Init(opts machine.InitOptions) (bool, error) {
 	mounts := []machine.Mount{}
 	for i, volume := range opts.Volumes {
 		tag := fmt.Sprintf("vol%d", i)
-		paths := strings.SplitN(volume, ":", 3)
+		paths := strings.SplitN(volume, string(os.PathListSeparator), 3)
 		source := paths[0]
 		target := source
+		if runtime.GOOS == "windows" {
+			target = "/" + strings.ReplaceAll(target, string(os.PathSeparator), "/")
+			target = strings.ReplaceAll(target, ":", "")
+		}
 		readonly := false
 		securityModel := "none"
 		if len(paths) > 1 {
