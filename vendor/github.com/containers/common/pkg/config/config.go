@@ -1331,8 +1331,14 @@ func (c *Config) FindHelperBinary(name string, searchPATH bool) (string, error) 
 			}
 		}
 		fullpath := filepath.Join(path, name)
-		if fi, err := os.Stat(fullpath); err == nil && fi.Mode().IsRegular() {
-			return fullpath, nil
+		if filepath.IsAbs(fullpath) {
+			if lp, err := exec.LookPath(fullpath); err == nil {
+				return lp, nil
+			}
+		} else {
+			if fi, err := os.Stat(fullpath); err == nil && fi.Mode().IsRegular() {
+				return fullpath, nil
+			}
 		}
 	}
 	if searchPATH {
