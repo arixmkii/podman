@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -308,8 +309,26 @@ func (v *MachineVM) Init(opts machine.InitOptions) (bool, error) {
 	for i, volume := range opts.Volumes {
 		tag := fmt.Sprintf("vol%d", i)
 		paths := strings.SplitN(volume, ":", 3)
+		if runtime.GOOS == "windows" {
+			driveLetterMatcher := regexp.MustCompile(`^[a-zA-Z]$`)
+			if len(paths) > 1 && driveLetterMatcher.MatchString(paths[0]) {
+				paths = strings.SplitN(volume, ":", 4)
+				newpaths := []string{paths[0] + ":" + paths[1]}
+				for _, v := range paths[2:] {
+					newpaths = append(newpaths, v)
+				}
+				paths = newpaths
+			}
+		}
 		source := paths[0]
 		target := source
+		if runtime.GOOS == "windows" {
+			target = strings.ReplaceAll(target, "\\", "/")
+			if !strings.HasPrefix(target, "/") {
+				target = "/" + target
+			}
+			target = strings.ReplaceAll(target, ":", "")
+		}
 		readonly := false
 		securityModel := "none"
 		if len(paths) > 1 {
