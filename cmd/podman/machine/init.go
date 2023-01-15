@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/containers/common/pkg/completion"
+	"github.com/containers/common/pkg/config"
 	"github.com/containers/podman/v4/cmd/podman/registry"
 	"github.com/containers/podman/v4/libpod/events"
 	"github.com/containers/podman/v4/pkg/machine"
@@ -118,7 +119,12 @@ func initMachine(cmd *cobra.Command, args []string) error {
 		vm  machine.VM
 	)
 
-	provider := GetSystemDefaultProvider()
+	cfg, err := config.ReadCustomConfig()
+	if err != nil {
+		return err
+	}
+
+	provider := GetSystemProvider(cfg.Machine.Provider)
 	initOpts.Name = defaultMachineName
 	if len(args) > 0 {
 		if len(args[0]) > maxMachineNameSize {
