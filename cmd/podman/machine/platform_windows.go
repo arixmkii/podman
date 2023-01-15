@@ -1,10 +1,32 @@
 package machine
 
 import (
+	"os"
+	"strings"
+
 	"github.com/containers/podman/v4/pkg/machine"
 	"github.com/containers/podman/v4/pkg/machine/wsl"
+	"github.com/sirupsen/logrus"
 )
 
-func GetSystemDefaultProvider() machine.Provider {
-	return wsl.GetWSLProvider()
+func GetSystemProvider(name string) machine.Provider {
+	provider := name
+	providerOverride, found := os.LookupEnv("CONTAINERS_MACHINE_PROVIDER")
+	if found {
+		provider = providerOverride
+	}
+	provider = strings.ToUpper(strings.TrimSpace(provider))
+	switch provider {
+	case "WSL":
+		return wsl.GetWSLProvider()
+	case "QEMU":
+		logrus.Info("QEMU provider is work in progress https://github.com/containers/podman/issues/13006. Will use default provider.")
+		return wsl.GetWSLProvider()
+		// return qemu.GetVirtualizationProvider()
+	default:
+		if len(provider) > 0 {
+			logrus.Warnf("Unuspported provider specified %q. Will use default provider.", provider)
+		}
+		return wsl.GetWSLProvider()
+	}
 }
