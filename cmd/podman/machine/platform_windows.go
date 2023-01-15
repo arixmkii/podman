@@ -1,19 +1,35 @@
 package machine
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/containers/common/pkg/config"
 	"github.com/containers/podman/v4/pkg/machine"
 	"github.com/containers/podman/v4/pkg/machine/hyperv"
 	"github.com/containers/podman/v4/pkg/machine/wsl"
 )
 
-func GetSystemDefaultProvider() machine.VirtProvider {
-	// This is a work-around for default provider on windows while
-	// hyperv is one developer.
-	// TODO this needs to be changed back
-	if _, exists := os.LookupEnv("HYPERV"); exists {
-		return hyperv.GetVirtualizationProvider()
+func GetSystemProvider() (machine.VirtProvider, error) {
+	cfg, err := config.Default()
+	if err != nil {
+		return nil, err
 	}
-	return wsl.GetWSLProvider()
+	provider := cfg.Machine.Provider
+	if providerOverride, found := os.LookupEnv("CONTAINERS_MACHINE_PROVIDER"); found {
+		provider = providerOverride
+	}
+	resolvedVMType, err := machine.ParseVMType(provider, machine.WSLVirt)
+	if err != nil {
+		return nil, err
+	}
+
+	switch resolvedVMType {
+	case machine.WSLVirt:
+		return wsl.GetWSLProvider(), nil
+	case machine.HyperVVirt:
+		return hyperv.GetVirtualizationProvider(), nil
+	default:
+		return nil, fmt.Errorf("unsupported virtualization provider: `%s`", resolvedVMType.String())
+	}
 }
