@@ -48,7 +48,10 @@ func machineOSManager(opts ManagerOpts) (pkgOS.Manager, error) {
 	if opts.VMName == "" {
 		vmName = pkgMachine.DefaultMachineName
 	}
-	provider := machine.GetSystemDefaultProvider()
+	provider, err := machine.GetSystemProvider(nil)
+	if err != nil {
+		return nil, err
+	}
 	vm, err := provider.LoadVMByName(vmName)
 	if err != nil {
 		return nil, err
