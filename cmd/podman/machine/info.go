@@ -101,7 +101,12 @@ func hostInfo() (*entities.MachineHostInfo, error) {
 	host.Arch = runtime.GOARCH
 	host.OS = runtime.GOOS
 
-	provider := GetSystemDefaultProvider()
+	cfg, err := config.ReadCustomConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	provider := GetSystemProvider(cfg.Machine.Provider)
 	var listOpts machine.ListOptions
 	listResponse, err := provider.List(listOpts)
 	if err != nil {
@@ -109,11 +114,6 @@ func hostInfo() (*entities.MachineHostInfo, error) {
 	}
 
 	host.NumberOfMachines = len(listResponse)
-
-	cfg, err := config.ReadCustomConfig()
-	if err != nil {
-		return nil, err
-	}
 
 	// Default state of machine is stopped
 	host.MachineState = "Stopped"
