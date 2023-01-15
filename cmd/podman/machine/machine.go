@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/containers/common/pkg/config"
 	"github.com/containers/podman/v4/cmd/podman/registry"
 	"github.com/containers/podman/v4/cmd/podman/validate"
 	"github.com/containers/podman/v4/libpod/events"
@@ -64,7 +65,13 @@ func autocompleteMachine(cmd *cobra.Command, args []string, toComplete string) (
 
 func getMachines(toComplete string) ([]string, cobra.ShellCompDirective) {
 	suggestions := []string{}
-	provider := GetSystemDefaultProvider()
+
+	cfg, err := config.ReadCustomConfig()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	provider := GetSystemProvider(cfg.Machine.Provider)
 	machines, err := provider.List(machine.ListOptions{})
 	if err != nil {
 		cobra.CompErrorln(err.Error())

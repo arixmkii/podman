@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/containers/common/pkg/completion"
+	"github.com/containers/common/pkg/config"
 	"github.com/containers/podman/v4/cmd/podman/registry"
 	"github.com/containers/podman/v4/pkg/machine"
 	"github.com/spf13/cobra"
@@ -84,7 +85,13 @@ func setMachine(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 && len(args[0]) > 0 {
 		vmName = args[0]
 	}
-	provider := GetSystemDefaultProvider()
+
+	cfg, err := config.ReadCustomConfig()
+	if err != nil {
+		return err
+	}
+
+	provider := GetSystemProvider(cfg.Machine.Provider)
 	vm, err = provider.LoadVMByName(vmName)
 	if err != nil {
 		return err

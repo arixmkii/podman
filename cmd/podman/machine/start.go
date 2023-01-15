@@ -6,6 +6,7 @@ package machine
 import (
 	"fmt"
 
+	"github.com/containers/common/pkg/config"
 	"github.com/containers/podman/v4/cmd/podman/registry"
 	"github.com/containers/podman/v4/libpod/events"
 	"github.com/containers/podman/v4/pkg/machine"
@@ -53,7 +54,13 @@ func start(_ *cobra.Command, args []string) error {
 		vmName = args[0]
 	}
 
-	provider := GetSystemDefaultProvider()
+	cfg, err := config.ReadCustomConfig()
+	if err != nil {
+		return err
+	}
+
+	provider := GetSystemProvider(cfg.Machine.Provider)
+
 	vm, err = provider.LoadVMByName(vmName)
 	if err != nil {
 		return err
