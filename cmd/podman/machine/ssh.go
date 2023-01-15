@@ -53,7 +53,13 @@ func ssh(cmd *cobra.Command, args []string) error {
 
 	// Set the VM to default
 	vmName := defaultMachineName
-	provider := GetSystemDefaultProvider()
+
+	cfg, err := config.ReadCustomConfig()
+	if err != nil {
+		return err
+	}
+
+	provider := GetSystemProvider(cfg.Machine.Provider)
 
 	// If len is greater than 0, it means we may have been
 	// provided the VM name.  If so, we check.  The VM name,
