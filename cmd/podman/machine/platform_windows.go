@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/containers/podman/v4/pkg/machine"
+	"github.com/containers/podman/v4/pkg/machine/qemu"
 	"github.com/containers/podman/v4/pkg/machine/wsl"
 	"github.com/sirupsen/logrus"
 )
@@ -20,9 +21,7 @@ func GetSystemProvider(name string) machine.Provider {
 	case "WSL":
 		return wsl.GetWSLProvider()
 	case "QEMU":
-		logrus.Info("QEMU provider is work in progress https://github.com/containers/podman/issues/13006. Will use default provider.")
-		return wsl.GetWSLProvider()
-		// return qemu.GetVirtualizationProvider()
+		return qemu.GetVirtualizationProvider()
 	default:
 		if len(provider) > 0 {
 			logrus.Warnf("Unuspported provider specified %q. Will use default provider.", provider)
