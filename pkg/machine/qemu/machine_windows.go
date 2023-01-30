@@ -3,6 +3,8 @@ package qemu
 import (
 	"bytes"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/containers/podman/v4/pkg/machine"
 )
