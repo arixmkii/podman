@@ -87,7 +87,16 @@ func (p *QEMUVirtualization) NewMachine(opts machine.InitOptions) (machine.VM, e
 	// Add network
 	// Right now the mac address is hardcoded so that the host networking gives it a specific IP address.  This is
 	// why we can only run one vm at a time right now
-	cmd = append(cmd, []string{"-netdev", "socket,id=vlan,fd=3", "-device", "virtio-net-pci,netdev=vlan,mac=5a:94:ef:e4:0c:ee"}...)
+	if useFdVLan() {
+		cmd = append(cmd, []string{"-netdev", fdVlanNetdev()}...)
+	} else {
+		vlanSocket, err := machineSocket(vm.Name, "vlan", "")
+		if err != nil {
+			return nil, err
+		}
+		cmd = append(cmd, []string{"-netdev", socketVlanNetdev(vlanSocket.GetPath())}...)
+	}
+	cmd = append(cmd, []string{"-device", "virtio-net-pci,netdev=vlan,mac=5a:94:ef:e4:0c:ee"}...)
 	if err := vm.setReadySocket(); err != nil {
 		return nil, err
 	}
@@ -103,6 +112,14 @@ func (p *QEMUVirtualization) NewMachine(opts machine.InitOptions) (machine.VM, e
 		"-pidfile", vm.VMPidFilePath.GetPath()}...)
 	vm.CmdLine = cmd
 	return vm, nil
+}
+
+func fdVlanNetdev() string {
+	return "socket,id=vlan,fd=3"
+}
+
+func socketVlanNetdev(path string) string {
+	return fmt.Sprintf("stream,id=vlan,server=off,addr.type=unix,addr.path=%s", path)
 }
 
 // LoadVMByName reads a json file that describes a known qemu vm
