@@ -28,6 +28,33 @@ func checkProcessStatus(processHint string, pid int, stderrBuf *bytes.Buffer) er
 	return nil
 }
 
+func forwardPipeArgs(name string, destPath string, identityPath string, user string) []string {
+	args := []string{}
+	args = append(args, []string{"-forward-sock", fmt.Sprintf("npipe:////./pipe/%s", toPipeName(name))}...)
+	args = append(args, []string{"-forward-dest", destPath}...)
+	args = append(args, []string{"-forward-user", user}...)
+	args = append(args, []string{"-forward-identity", identityPath}...)
+	return args
+}
+
+func podmanPipe(name string) *machine.VMFile {
+	return &machine.VMFile{Path: `\\.\pipe\` + toPipeName(name)}
+}
+
+func toPipeName(name string) string {
+	if !strings.HasPrefix(name, "qemu") {
+		if !strings.HasPrefix(name, "podman") {
+			name = "podman-" + name
+		}
+		name = "qemu-" + name
+	}
+	return name
+}
+
+func useFdVLan() bool {
+	return false
+}
+
 func pathsFromVolume(volume string) []string {
 	paths := strings.SplitN(volume, ":", 3)
 	driveLetterMatcher := regexp.MustCompile(`^(?:\\\\[.?]\\)?[a-zA-Z]$`)
