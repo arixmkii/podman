@@ -1332,12 +1332,11 @@ func (v *MachineVM) setupAPIForwarding(cmd []string) ([]string, string, apiForwa
 		forwardUser = "root"
 	}
 
-	cmdPipe, err := forwardPipeArgs(cmd, v.Name, destSock, v.IdentityPath, forwardUser)
+	cmdWithPipe, err := forwardPipeArgs(cmd, v.Name, destSock, v.IdentityPath, forwardUser)
 	if err != nil {
 		return cmd, "", noForwarding
 	}
-	cmd = append(cmd, cmdPipe...)
-	cmd = forwardSocketArgs(cmd, socket.GetPath(), destSock, v.IdentityPath, forwardUser)
+	cmd = forwardSocketArgs(cmdWithPipe, socket.GetPath(), destSock, v.IdentityPath, forwardUser)
 
 	// The linking pattern is /var/run/docker.sock -> user global sock (link) -> machine sock (socket)
 	// This allows the helper to only have to maintain one constant target to the user, which can be
