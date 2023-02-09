@@ -539,7 +539,7 @@ func (v *MachineVM) Start(name string, opts machine.StartOptions) error {
 		cmdLine = append(cmdLine, "-display", "none")
 	}
 
-	forwardSock, forwardState, err := v.startHostNetworking(vlanSocket)
+	forwardSock, forwardState, forwarderProcess, err := v.startHostNetworking(vlanSocket)
 	if err != nil {
 		return fmt.Errorf("unable to start host networking: %q", err)
 	}
@@ -570,6 +570,21 @@ func (v *MachineVM) Start(name string, opts machine.StartOptions) error {
 			return err
 		}
 		defer fd.Close()
+	} else {
+		time.Sleep(wait)
+		for i := 0; i < 6; i++ {
+			// check if gvproxy is still alive
+			err := checkProcessStatus(machine.ForwarderBinaryName, forwarderProcess.Pid, nil)
+			if err != nil {
+				return err
+			}
+			_, err = os.Stat(vlanSocket.GetPath())
+			if err == nil {
+				break
+			}
+			time.Sleep(wait)
+			wait++
+		}
 	}
 	dnr, err := os.OpenFile(os.DevNull, os.O_RDONLY, 0755)
 	if err != nil {
@@ -1256,24 +1271,24 @@ func (p *Provider) CheckExclusiveActiveVM() (bool, string, error) {
 
 // startHostNetworking runs a binary on the host system that allows users
 // to set up port forwarding to the podman virtual machine
-func (v *MachineVM) startHostNetworking(vlanSocket *machine.VMFile) (string, apiForwardingState, error) {
+func (v *MachineVM) startHostNetworking(vlanSocket *machine.VMFile) (string, apiForwardingState, *os.Process, error) {
 	cfg, err := config.Default()
 	if err != nil {
-		return "", noForwarding, err
+		return "", noForwarding, nil, err
 	}
 	binary, err := cfg.FindHelperBinary(machine.ForwarderBinaryName, false)
 	if err != nil {
-		return "", noForwarding, err
+		return "", noForwarding, nil, err
 	}
 
 	attr := new(os.ProcAttr)
 	dnr, err := os.OpenFile(os.DevNull, os.O_RDONLY, 0755)
 	if err != nil {
-		return "", noForwarding, err
+		return "", noForwarding, nil, err
 	}
 	dnw, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0755)
 	if err != nil {
-		return "", noForwarding, err
+		return "", noForwarding, nil, err
 	}
 
 	defer dnr.Close()
@@ -1295,11 +1310,11 @@ func (v *MachineVM) startHostNetworking(vlanSocket *machine.VMFile) (string, api
 		cmd = append(cmd, "--debug")
 		fmt.Println(cmd)
 	}
-	_, err = os.StartProcess(cmd[0], cmd, attr)
+	proc, err := os.StartProcess(cmd[0], cmd, attr)
 	if err != nil {
-		return "", 0, fmt.Errorf("unable to execute: %q: %w", cmd, err)
+		return "", 0, nil, fmt.Errorf("unable to execute: %q: %w", cmd, err)
 	}
-	return forwardSock, state, nil
+	return forwardSock, state, proc, nil
 }
 
 func (v *MachineVM) setupAPIForwarding(cmd []string) ([]string, string, apiForwardingState) {
