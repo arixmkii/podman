@@ -645,16 +645,11 @@ func (v *MachineVM) Start(name string, opts machine.StartOptions) error {
 		fmt.Println("Waiting for VM ...")
 	}
 
-	readySocket, err := machineSocket(v.Name, "", "ready")
-	if err != nil {
-		return err
-	}
-
 	// The socket is not made until the qemu process is running so here
 	// we do a backoff waiting for it.  Once we have a conn, we break and
 	// then wait to read it.
 	for i := 0; i < 6; i++ {
-		conn, err = net.Dial("unix", readySocket.GetPath())
+		conn, err = net.Dial("unix", v.ReadySocket.GetPath())
 		if err == nil {
 			break
 		}
