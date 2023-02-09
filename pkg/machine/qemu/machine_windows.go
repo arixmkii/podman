@@ -33,7 +33,7 @@ func forwardPipeArgs(cmd []string, name string, destPath string, identityPath st
 	if !machine.PipeNameAvailable(machinePipe) {
 		return nil, fmt.Errorf("could not start api proxy since expected pipe is not available: %s", machinePipe)
 	}
-	cmd = append(cmd, []string{"-forward-sock", fmt.Sprintf("npipe:////./pipe/%s", )}...)
+	cmd = append(cmd, []string{"-forward-sock", fmt.Sprintf("npipe:////./pipe/%s", machinePipe)}...)
 	cmd = append(cmd, []string{"-forward-dest", destPath}...)
 	cmd = append(cmd, []string{"-forward-user", user}...)
 	cmd = append(cmd, []string{"-forward-identity", identityPath}...)
