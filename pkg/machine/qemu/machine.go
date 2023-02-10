@@ -573,7 +573,8 @@ func (v *MachineVM) Start(name string, opts machine.StartOptions) error {
 	} else {
 		time.Sleep(wait)
 		for i := 0; i < 6; i++ {
-			// check if gvproxy is still alive
+			// First need to verify that gvproxy is alive,
+			// because `.sock` file could belong to a different process
 			err := checkProcessStatus(machine.ForwarderBinaryName, forwarderProcess.Pid, nil)
 			if err != nil {
 				return err
@@ -649,7 +650,7 @@ func (v *MachineVM) Start(name string, opts machine.StartOptions) error {
 	// we do a backoff waiting for it.  Once we have a conn, we break and
 	// then wait to read it.
 	for i := 0; i < 6; i++ {
-		conn, err = net.Dial("unix", v.ReadySocket.GetPath())
+		conn, err = net.Dial("unix", v.ReadySocket.Path)
 		if err == nil {
 			break
 		}
