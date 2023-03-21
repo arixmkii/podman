@@ -7,6 +7,7 @@ import (
 	"github.com/containers/common/pkg/config"
 	"github.com/containers/podman/v4/pkg/machine"
 	"github.com/containers/podman/v4/pkg/machine/hyperv"
+	"github.com/containers/podman/v4/pkg/machine/qemu"
 	"github.com/containers/podman/v4/pkg/machine/wsl"
 )
 
@@ -34,6 +35,8 @@ func GetSystemProvider(vmType *machine.VMType) (machine.VirtProvider, error) {
 		return wsl.GetWSLProvider(), nil
 	case machine.HyperVVirt:
 		return hyperv.GetVirtualizationProvider(), nil
+	case machine.QemuVirt:
+		return qemu.GetVirtualizationProvider(), nil
 	default:
 		return nil, fmt.Errorf("unsupported virtualization provider: `%s`", resolvedVMType.String())
 	}
