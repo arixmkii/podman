@@ -1874,8 +1874,5 @@ func retryRecoverableWithDelay(n int, wait time.Duration, factor float64, f func
 		time.Sleep(wait)
 		wait = time.Duration(float64(wait) * factor)
 	}
-	if rec != nil {
-		return rec
-	}
-	return nil
+	return rec
 }
