@@ -54,8 +54,6 @@ const (
 	dockerSock           = "/var/run/docker.sock"
 	dockerConnectTimeout = 5 * time.Second
 	apiUpTimeout         = 20 * time.Second
-	retryCountForStart   = 6
-	retryCountForStop    = 5
 )
 
 type apiForwardingState int
@@ -562,10 +560,14 @@ func (v *MachineVM) Start(name string, opts machine.StartOptions) error {
 			return err
 		}
 
-		err := retryRecoverableWithDelay(retryCountForStart, wait, 1.0, func() (error, error) {
+		for i := 0; i < 6; i++ {
 			qemuSocketConn, err = net.Dial("unix", vlanSocket.GetPath())
-			return err, nil
-		})
+			if err == nil {
+				break
+			}
+			time.Sleep(wait)
+			wait++
+		}
 		if err != nil {
 			return err
 		}
@@ -578,18 +580,19 @@ func (v *MachineVM) Start(name string, opts machine.StartOptions) error {
 		defer fd.Close()
 	} else {
 		time.Sleep(wait)
-		err := retryRecoverableWithDelay(retryCountForStart, wait, 1.0, func() (error, error) {
+		for i := 0; i < 6; i++ {
 			// First need to verify that gvproxy is alive,
 			// because `.sock` file could belong to a different process
 			err := checkProcessStatus(machine.ForwarderBinaryName, forwarderProcess.Pid, nil)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			_, err = os.Stat(vlanSocket.GetPath())
-			return err, nil
-		})
-		if err != nil {
-			return err
+			if err == nil {
+				break
+			}
+			time.Sleep(wait)
+			wait++
 		}
 	}
 	dnr, err := os.OpenFile(os.DevNull, os.O_RDONLY, 0755)
@@ -654,16 +657,19 @@ func (v *MachineVM) Start(name string, opts machine.StartOptions) error {
 	// The socket is not made until the qemu process is running so here
 	// we do a backoff waiting for it.  Once we have a conn, we break and
 	// then wait to read it.
-	err = retryRecoverableWithDelay(retryCountForStart, wait, 1.0, func() (error, error) {
-		var errRec error
-		conn, errRec = net.Dial("unix", v.ReadySocket.Path)
-		if errRec == nil {
-			return nil, nil
+	for i := 0; i < 6; i++ {
+		conn, err = net.Dial("unix", v.ReadySocket.Path)
+		if err == nil {
+			break
 		}
 		// check if qemu is still alive
 		err := checkProcessStatus("qemu", cmd.Process.Pid, stderrBuf)
-		return errRec, err
-	})
+		if err != nil {
+			return err
+		}
+		time.Sleep(wait)
+		wait++
+	}
 	if err != nil {
 		return err
 	}
@@ -884,17 +890,17 @@ func (v *MachineVM) Stop(_ string, _ machine.StopOptions) error {
 		// machine to stop
 		fmt.Println("Waiting for VM to stop running...")
 		waitInternal := 250 * time.Millisecond
-
-		_ = retryRecoverableWithDelay(retryCountForStop, waitInternal, 2.0, func() (error, error) {
+		for i := 0; i < 5; i++ {
 			state, err := v.State(false)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			if state != machine.Running {
-				return nil, nil
+				break
 			}
-			return fmt.Errorf("Retry"), nil
-		})
+			time.Sleep(waitInternal)
+			waitInternal *= 2
+		}
 		// after the machine stops running it normally takes about 1 second for the
 		// qemu VM to exit so we wait a bit to try to avoid issues
 		time.Sleep(2 * time.Second)
@@ -1857,25 +1863,4 @@ func extractMountOptions(paths []string) (bool, string) {
 		}
 	}
 	return readonly, securityModel
-}
-
-// `f func() (error, error)` returns recoverable (which will be retried) and fatal errors (which will short circuit).
-// Method itself returns only the last error causing unsuccessful termination or nil in case of success
-func retryRecoverableWithDelay(n int, wait time.Duration, factor float64, f func() (error, error)) error {
-	var rec error
-	for i := 0; i < n; i++ {
-		var nonrec error
-		rec, nonrec = f()
-		if nonrec != nil {
-			return nonrec
-		} else if rec == nil {
-			break
-		}
-		time.Sleep(wait)
-		wait = time.Duration(float64(wait) * factor)
-	}
-	if rec != nil {
-		return rec
-	}
-	return nil
 }
