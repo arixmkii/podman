@@ -84,6 +84,14 @@ Username to use for executing commands in remote VM. Default value is `core`
 for FCOS and `user` for Fedora (default on Windows hosts). Should match the one
 used inside the resulting VM image.
 
+#### **--identity**
+
+Relative or absolute path to use for identity files (private key part). If the
+path is relative, then it would be evaluated relative to the default .ssh
+directory. All directories should be created in advance. If this is unset or
+is whitespace or empty, then the filename would be dinamically chosen for the
+machine.
+
 #### **--volume**, **-v**=*source:target[:options]*
 
 Mounts a volume from source to target.
