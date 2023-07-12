@@ -7,6 +7,7 @@ import (
 	"github.com/containers/common/pkg/config"
 	"github.com/containers/podman/v4/pkg/machine"
 	"github.com/containers/podman/v4/pkg/machine/hyperv"
+	"github.com/containers/podman/v4/pkg/machine/qemu"
 	"github.com/containers/podman/v4/pkg/machine/wsl"
 	"github.com/sirupsen/logrus"
 )
@@ -29,6 +30,8 @@ func GetSystemProvider() (machine.VirtProvider, error) {
 	switch resolvedVMType {
 	case machine.WSLVirt:
 		return wsl.VirtualizationProvider(), nil
+	case machine.QemuVirt:
+		return qemu.VirtualizationProvider(), nil
 	case machine.HyperVVirt:
 		return hyperv.VirtualizationProvider(), nil
 	default:
