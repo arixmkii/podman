@@ -529,15 +529,9 @@ func (v *MachineVM) Start(name string, opts machine.StartOptions) error {
 	} else {
 		time.Sleep(backoff)
 		for i := 0; i < retryCountForStart; i++ {
-			for i := 0; i < maxBackoffs; i++ {
-				if i > 0 {
-					time.Sleep(backoff)
-					backoff *= 2
-				}
-				qemuSocketConn, err = net.Dial("unix", vlanSocket.GetPath())
-				if err == nil {
-					break
-				}
+			if i > 0 {
+				time.Sleep(backoff)
+				backoff *= 2
 			}
 			// First need to verify that gvproxy is alive,
 			// because `.sock` file could belong to a different process
