@@ -42,7 +42,7 @@ func (v *MachineVM) setQMPMonitorSocket() error {
 
 // setNewMachineCMD configure the CLI command that will be run to create the new
 // machine
-func (v *MachineVM) setNewMachineCMD(qemuBinary string) {
+func (v *MachineVM) setNewMachineCMD(qemuBinary string) error {
 	cmd := []string{qemuBinary}
 	// Add memory
 	cmd = append(cmd, []string{"-m", strconv.Itoa(int(v.Memory))}...)
@@ -55,7 +55,16 @@ func (v *MachineVM) setNewMachineCMD(qemuBinary string) {
 	// Add network
 	// Right now the mac address is hardcoded so that the host networking gives it a specific IP address.  This is
 	// why we can only run one vm at a time right now
-	cmd = append(cmd, []string{"-netdev", "socket,id=vlan,fd=3", "-device", "virtio-net-pci,netdev=vlan,mac=5a:94:ef:e4:0c:ee"}...)
+	if useFdVLan() {
+		cmd = append(cmd, []string{"-netdev", fdVlanNetdev()}...)
+	} else {
+		vlanSocket, err := machineSocket(v.Name, "vlan", "")
+		if err != nil {
+			return err
+		}
+		cmd = append(cmd, []string{"-netdev", socketVlanNetdev(vlanSocket.GetPath())}...)
+	}
+	cmd = append(cmd, []string{"-device", "virtio-net-pci,netdev=vlan,mac=5a:94:ef:e4:0c:ee"}...)
 
 	// Add serial port for readiness
 	cmd = append(cmd, []string{
@@ -67,6 +76,15 @@ func (v *MachineVM) setNewMachineCMD(qemuBinary string) {
 		"-device", "virtserialport,chardev=a" + v.Name + "_ready" + ",name=org.fedoraproject.port.0",
 		"-pidfile", v.VMPidFilePath.GetPath()}...)
 	v.CmdLine = cmd
+	return nil
+}
+
+func fdVlanNetdev() string {
+	return "socket,id=vlan,fd=3"
+}
+
+func socketVlanNetdev(path string) string {
+	return fmt.Sprintf("stream,id=vlan,server=off,addr.type=unix,addr.path=%s", path)
 }
 
 // NewMachine initializes an instance of a virtual machine based on the qemu
@@ -130,7 +148,9 @@ func (p *QEMUVirtualization) NewMachine(opts machine.InitOptions) (machine.VM, e
 	}
 
 	// configure command to run
-	vm.setNewMachineCMD(execPath)
+	if err := vm.setNewMachineCMD(execPath); err != nil {
+		return nil, err
+	}
 	return vm, nil
 }
 
