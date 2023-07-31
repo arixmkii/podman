@@ -9,6 +9,17 @@ import (
 	"time"
 )
 
+// nolint // Cleaner to refer to the official OS constant names, and consistent with syscall
+const (
+	WM_QUIT = 0x12
+)
+
+func SendQuit(tid uint32) {
+	user32 := syscall.NewLazyDLL("user32.dll")
+	postMessage := user32.NewProc("PostThreadMessageW")
+	postMessage.Call(uintptr(tid), WM_QUIT, 0, 0)
+}
+
 func GetProcessState(pid int) (active bool, exitCode int) {
 	const da = syscall.STANDARD_RIGHTS_READ | syscall.PROCESS_QUERY_INFORMATION | syscall.SYNCHRONIZE
 	handle, err := syscall.OpenProcess(da, false, uint32(pid))

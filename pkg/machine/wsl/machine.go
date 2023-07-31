@@ -1270,7 +1270,7 @@ func stopWinProxy(v *MachineVM) error {
 	if err != nil {
 		return nil
 	}
-	sendQuit(tid)
+	machine.SendQuit(tid)
 	_ = waitTimeout(proc, 20*time.Second)
 	_ = os.Remove(tidFile)
 
