@@ -28,7 +28,6 @@ import (
 	"github.com/containers/storage/pkg/lockfile"
 	"github.com/digitalocean/go-qemu/qmp"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 )
 
 var (
@@ -574,7 +573,7 @@ func (v *MachineVM) connectToQMPMonitorSocket(maxBackoffs int, backoff time.Dura
 
 // connectToPodmanSocket attempts to connect to the podman socket after
 // `maxBackoffs` attempts.
-func connectToPodmanSocket(maxBackoffs int, backoff time.Duration, processName string, pid int, errBuf *bytes.Buffer, path string) (conn net.Conn, dialErr error) {
+func (v *MachineVM) connectToPodmanSocket(maxBackoffs int, backoff time.Duration, processName string, pid int, errBuf *bytes.Buffer, path string) (conn net.Conn, dialErr error) {
 	// The socket is not made until the qemu process is running so here
 	// we do a backoff waiting for it.  Once we have a conn, we break and
 	// then wait to read it.
@@ -618,14 +617,7 @@ func (v *MachineVM) qemuPid() (int, error) {
 		return -1, nil
 	}
 
-	if err := unix.Kill(pid, 0); err != nil {
-		if err == unix.ESRCH {
-			return -1, nil
-		}
-		return -1, fmt.Errorf("pinging QEMU process: %w", err)
-	}
-
-	return pid, nil
+	return pingProcess(pid)
 }
 
 // Start executes the qemu command line and forks it
@@ -728,7 +720,7 @@ func (v *MachineVM) Start(name string, opts machine.StartOptions) error {
 	}()
 
 	if isFdVlanVM {
-		qemuSocketConn, err = connectToPodmanSocket(maxBackoffs, defaultBackoff, "gvproxy", forwarderProcess.Pid, nil, vlanSocket.GetPath())
+		qemuSocketConn, err = v.connectToPodmanSocket(maxBackoffs, defaultBackoff, "gvproxy", forwarderProcess.Pid, nil, vlanSocket.GetPath())
 		if err != nil {
 			return err
 		}
@@ -808,7 +800,7 @@ func (v *MachineVM) Start(name string, opts machine.StartOptions) error {
 		fmt.Println("Waiting for VM ...")
 	}
 
-	conn, err = connectToPodmanSocket(maxBackoffs, defaultBackoff, "qemu", cmd.Process.Pid, stderrBuf, v.ReadySocket.Path)
+	conn, err = v.connectToPodmanSocket(maxBackoffs, defaultBackoff, "qemu", cmd.Process.Pid, stderrBuf, v.ReadySocket.Path)
 	if err != nil {
 		return err
 	}
@@ -1033,7 +1025,7 @@ func (v *MachineVM) Stop(_ string, _ machine.StopOptions) error {
 		return stopErr
 	}
 
-	if err := unix.Kill(qemuPid, unix.SIGKILL); err != nil {
+	if err := killMachine(qemuPid); err != nil {
 		if stopErr == nil {
 			return err
 		}
@@ -1140,7 +1132,11 @@ func (v *MachineVM) stopLocked() error {
 	}
 
 	fmt.Println("Waiting for VM to exit...")
-	for isProcessAlive(vmPid) {
+	for true {
+		alive, _ := isProcessAlive(vmPid)
+		if !alive {
+			break
+		}
 		time.Sleep(500 * time.Millisecond)
 	}
 

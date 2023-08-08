@@ -14,12 +14,27 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func isProcessAlive(pid int) bool {
+func isProcessAlive(pid int) (bool, error) {
 	err := unix.Kill(pid, syscall.Signal(0))
 	if err == nil || err == unix.EPERM {
-		return true
+		return true, nil
 	}
-	return false
+	return false, err
+}
+
+func pingProcess(pid int) (int, error) {
+	alive, err := isProcessAlive(pid)
+	if !alive {
+		if err == unix.ESRCH {
+			return -1, nil
+		}
+		return -1, fmt.Errorf("pinging QEMU process: %w", err)
+	}
+	return pid, nil
+}
+
+func killMachine(pid int) error {
+	return unix.Kill(pid, unix.SIGKILL)
 }
 
 func checkProcessStatus(processHint string, pid int, stderrBuf *bytes.Buffer) error {

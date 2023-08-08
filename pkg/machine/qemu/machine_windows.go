@@ -9,11 +9,24 @@ import (
 	"github.com/containers/podman/v4/pkg/machine"
 )
 
-func isProcessAlive(pid int) bool {
+func isProcessAlive(pid int) (bool, error) {
 	if checkProcessStatus("process", pid, nil) == nil {
-		return true
+		return true, nil
 	}
-	return false
+	return false, nil
+}
+
+func pingProcess(pid int) (int, error) {
+	alive, _ := isProcessAlive(pid)
+	if !alive {
+		return -1, nil
+	}
+	return pid, nil
+}
+
+func killMachine(pid int) error {
+	machine.SendQuit(uint32(pid))
+	return nil
 }
 
 func checkProcessStatus(processHint string, pid int, stderrBuf *bytes.Buffer) error {
