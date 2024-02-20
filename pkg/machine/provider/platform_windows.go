@@ -33,6 +33,8 @@ func Get() (vmconfigs.VMProvider, error) {
 		return new(wsl.WSLStubber), nil
 	case define.HyperVVirt:
 		return new(hyperv.HyperVStubber), nil
+	case define.QemuVirt:
+		return getQemuProvider()
 	default:
 		return nil, fmt.Errorf("unsupported virtualization provider: `%s`", resolvedVMType.String())
 	}
