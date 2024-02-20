@@ -1,9 +1,11 @@
 package e2e_test
 
 import (
+	"runtime"
 	"strconv"
 	"strings"
 
+	"github.com/containers/podman/v5/pkg/machine/define"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gexec"
@@ -66,6 +68,10 @@ func (i *initMachine) buildCmd(m *machineTestBuilder) []string {
 	}
 	for _, v := range i.volumes {
 		cmd = append(cmd, "--volume", v)
+	}
+	// Suppress default mounts for QEMU on Windows
+	if len(i.volumes) == 0 && testProvider.VMType() == define.QemuVirt && runtime.GOOS == "windows" {
+		cmd = append(cmd, "--volume", "")
 	}
 	if i.now {
 		cmd = append(cmd, "--now")

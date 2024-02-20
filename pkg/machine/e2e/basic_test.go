@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/containers/podman/v5/pkg/machine/define"
@@ -60,6 +61,9 @@ var _ = Describe("run basic podman commands", func() {
 	})
 
 	It("Volume ops", func() {
+		if testProvider.VMType() == define.QemuVirt && runtime.GOOS == "windows" {
+			Skip("volumes are not yet supported on official QEMU builds running under Windows")
+		}
 		tDir, err := filepath.Abs(GinkgoT().TempDir())
 		Expect(err).ToNot(HaveOccurred())
 		roFile := filepath.Join(tDir, "attr-test-file")
@@ -100,6 +104,9 @@ var _ = Describe("run basic podman commands", func() {
 		// In theory this could run on MacOS too, but we know virtiofs works for that now,
 		// this is just testing linux
 		skipIfNotVmtype(define.QemuVirt, "This is just adding coverage for virtiofs on linux")
+		if testProvider.VMType() == define.QemuVirt && runtime.GOOS == "windows" {
+			Skip("volumes are not yet supported on official QEMU builds running under Windows")
+		}
 
 		tDir, err := filepath.Abs(GinkgoT().TempDir())
 		Expect(err).ToNot(HaveOccurred())
@@ -190,6 +197,9 @@ var _ = Describe("run basic podman commands", func() {
 
 	It("podman volume on non-standard path", func() {
 		skipIfWSL("Requires standard volume handling")
+		if testProvider.VMType() == define.QemuVirt && runtime.GOOS == "windows" {
+			Skip("volumes are not yet supported on official QEMU builds running under Windows")
+		}
 		dir, err := os.MkdirTemp("", "machine-volume")
 		Expect(err).ToNot(HaveOccurred())
 		defer os.RemoveAll(dir)

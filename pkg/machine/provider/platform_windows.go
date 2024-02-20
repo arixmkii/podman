@@ -31,6 +31,8 @@ func Get() (vmconfigs.VMProvider, error) {
 
 	logrus.Debugf("Using Podman machine with `%s` virtualization provider", resolvedVMType.String())
 	switch resolvedVMType {
+	case define.QemuVirt:
+		return getQemuProvider()
 	case define.WSLVirt:
 		return new(wsl.WSLStubber), nil
 	case define.HyperVVirt:
@@ -43,20 +45,10 @@ func Get() (vmconfigs.VMProvider, error) {
 	}
 }
 
-func GetAll() []vmconfigs.VMProvider {
-	return []vmconfigs.VMProvider{
-		new(wsl.WSLStubber),
-		new(hyperv.HyperVStubber),
-	}
-}
-
-// SupportedProviders returns the providers that are supported on the host operating system
-func SupportedProviders() []define.VMType {
-	return []define.VMType{define.HyperVVirt, define.WSLVirt}
-}
-
 func IsInstalled(provider define.VMType) (bool, error) {
 	switch provider {
+	case define.QemuVirt:
+		return isQemuInstalled(), nil
 	case define.WSLVirt:
 		return wutil.IsWSLInstalled(), nil
 	case define.HyperVVirt:

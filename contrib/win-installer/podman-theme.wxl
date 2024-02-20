@@ -7,7 +7,7 @@
   <String Id="Title" Value="[WixBundleName] [VERSION]" />
   <String Id="InstallHeader" Value="Welcome to [WixBundleName] Setup" />
   <String Id="InstallMessage" Value="Welcome to the [WixBundleName] [VERSION] setup wizard. This will install [WixBundleName] on your computer." />
-  <String Id="ProvidersMessage" Value="Additionally, you have the option to select the virtualization provider required by Podman: WSLv2 or Hyper-V.
+  <String Id="ProvidersMessage" Value="Additionally, you have the option to select the virtualization provider required by Podman: WSLv2 or Hyper-V or QEMU.
 
 You can choose to also install the virtualization provider if it is not already enabled. This operation requires a reboot during the installation process. Alternatively, you can deselect the checkbox, and install the virtualization provider manually.
 

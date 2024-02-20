@@ -64,6 +64,15 @@ above.
 1. `$env:CONTAINERS_MACHINE_PROVIDER="wsl"`
 1. `.\winmake localmachine`
 
+### QEMU
+
+1. Install QEMU and add it to either user or sysmem PATH variable
+1. Open a powershell as a regular user
+1. `.\winmake.ps1 podman-remote && .\winmake.ps1 win-gvproxy`
+1. `$env:CONTAINERS_HELPER_BINARY_DIR="$pwd\bin\windows"`
+1. `$env:CONTAINERS_MACHINE_PROVIDER="qemu"`
+1. `.\winmake localmachine`
+
 ## MacOS
 
 Macs now support two different machine providers: `applehv` and `libkrun`. The

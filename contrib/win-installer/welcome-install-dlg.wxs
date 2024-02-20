@@ -11,6 +11,7 @@
                     <RadioButtonGroup Property="MACHINE_PROVIDER">
                         <RadioButton Text="Windows Linux Subsystem (WSLv2)" Height="15" Value="wsl" Width="226" X="10" Y="0" />
                         <RadioButton Text="Windows Hyper-V" Height="15" Value="hyperv" Width="226" X="10" Y="15" />
+                        <RadioButton Text="QEMU (distribution of QEMU not bundled)" Height="15" Value="qemu" Width="226" X="10" Y="30" />
                     </RadioButtonGroup>
 
                 </Control>
