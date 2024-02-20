@@ -36,6 +36,8 @@ func Get() (vmconfigs.VMProvider, error) {
 			return nil, fmt.Errorf("hyperv machines require admin authority")
 		}
 		return new(hyperv.HyperVStubber), nil
+	case define.QemuVirt:
+		return getQemuProvider()
 	default:
 		return nil, fmt.Errorf("unsupported virtualization provider: `%s`", resolvedVMType.String())
 	}
